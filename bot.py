@@ -5,7 +5,8 @@ import time
 from datetime import datetime, timedelta
 import pytz
 import telebot
-from config import TZ, EGA_ID
+from config import STANDART_TZ, EGA_ID
+from db import _tz
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 if not BOT_TOKEN:
@@ -40,7 +41,7 @@ def eslatmalar_ishchi():
 
     while True:
         try:
-            now = datetime.now(TZ)
+            now = datetime.now(_tz())
             bugun = now.strftime("%d.%m.%Y")
             soat = now.strftime("%H:%M")
             soat_min = (now.hour, now.minute)
