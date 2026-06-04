@@ -40,7 +40,7 @@ def ai_javob(shaxsiyat, savol, tarix=None, qoshimcha_kontekst=""):
     messages.append({"role": "user", "content": savol})
 
     payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "max_tokens": 1024,
         "system": system,
         "messages": messages,
