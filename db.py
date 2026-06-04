@@ -122,6 +122,14 @@ def init_db():
         qiymat TEXT
     )""")
 
+    # Shaxsiy ma'lumotlar (AI eslab qoladi) - har yo'nalish + umumiy
+    c.execute("""CREATE TABLE IF NOT EXISTS profil (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        yonalish_id INTEGER,
+        matn TEXT NOT NULL,
+        yaratilgan TEXT
+    )""")
+
     conn.commit()
 
     # Boshlang'ich yo'nalishlarni qo'shish (faqat bo'sh bo'lsa)
@@ -405,3 +413,44 @@ def sozlama_saqla(kalit, qiymat):
                  (kalit, str(qiymat)))
     conn.commit()
     conn.close()
+
+
+
+# ============ PROFIL (AI xotirasi) ============
+def profil_qosh(matn, yonalish_id=None):
+    conn = get_db()
+    conn.execute("INSERT INTO profil (yonalish_id, matn, yaratilgan) VALUES (?,?,?)",
+                 (yonalish_id, matn, hozir_str()))
+    conn.commit()
+    conn.close()
+
+
+def profil_ol(yonalish_id=None):
+    """yonalish_id=None bo'lsa umumiy + shu yo'nalish ma'lumotlari"""
+    conn = get_db()
+    if yonalish_id:
+        r = conn.execute(
+            "SELECT * FROM profil WHERE yonalish_id IS NULL OR yonalish_id=? ORDER BY id",
+            (yonalish_id,)).fetchall()
+    else:
+        r = conn.execute("SELECT * FROM profil ORDER BY id").fetchall()
+    conn.close()
+    return r
+
+
+def profil_ochir(pid):
+    conn = get_db()
+    conn.execute("DELETE FROM profil WHERE id=?", (pid,))
+    conn.commit()
+    conn.close()
+
+
+def profil_matn(yonalish_id=None):
+    """AI uchun profilni matn ko'rinishida qaytaradi"""
+    royxat = profil_ol(yonalish_id)
+    if not royxat:
+        return ""
+    matn = "Foydalanuvchi haqida ma'lumotlar:\n"
+    for p in royxat:
+        matn += f"- {p['matn']}\n"
+    return matn
