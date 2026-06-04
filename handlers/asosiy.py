@@ -2,8 +2,8 @@ import logging
 from datetime import datetime, timedelta
 import pytz
 from telebot import types
-from config import TZ, EGA_ID, USTUVORLIK, USTUVORLIK_NOMI, BUDJET_TUR
-from db import (get_yonalishlar, get_yonalish, yonalish_qosh, yonalish_ochir,
+from config import EGA_ID, USTUVORLIK, USTUVORLIK_NOMI, BUDJET_TUR, VAQT_ZONALARI
+from db import (_tz, sozlama_ol, sozlama_saqla, get_yonalishlar, get_yonalish, yonalish_qosh, yonalish_ochir,
                 vazifa_qosh, vazifalar_royxat, vazifa_bajar, vazifa_ochir, bugungi_vazifalar,
                 eslatma_qosh, eslatmalar_royxat, eslatma_ochir,
                 budjet_qosh, budjet_xulosa, budjet_royxat,
@@ -206,7 +206,7 @@ def register(bot):
         if tur == "bugun":
             muddat = bugun_str()
         elif tur == "ertaga":
-            muddat = (datetime.now(TZ) + timedelta(days=1)).strftime("%d.%m.%Y")
+            muddat = (datetime.now(_tz()) + timedelta(days=1)).strftime("%d.%m.%Y")
         elif tur == "qol":
             st["step"] = "vazifa_muddat_qol"
             astate[uid] = st
@@ -291,7 +291,7 @@ def register(bot):
     # ============ BUDJET ============
     @bot.message_handler(func=lambda m: m.text == "💰 Budjet" and faqat_ega(m.from_user.id))
     def h_budjet(msg):
-        oy = datetime.now(TZ).strftime("%m.%Y")
+        oy = datetime.now(_tz()).strftime("%m.%Y")
         x = budjet_xulosa(oy=oy)
         matn = f"💰 BUDJET — {oy}\n" + "━" * 20 + "\n\n"
         matn += f"💰 Daromad: {fmt_pul(x['daromad'])} so'm\n"
@@ -333,7 +333,7 @@ def register(bot):
     @bot.callback_query_handler(func=lambda c: c.data == "BYON_MENU")
     def cb_byon_menu(call):
         matn = "📊 YO'NALISH BO'YICHA BUDJET\n" + "━" * 25 + "\n\n"
-        oy = datetime.now(TZ).strftime("%m.%Y")
+        oy = datetime.now(_tz()).strftime("%m.%Y")
         for y in get_yonalishlar():
             x = budjet_xulosa(y["id"], oy)
             if x["daromad"] or x["rasxod"]:
@@ -466,15 +466,49 @@ def register(bot):
     @bot.message_handler(func=lambda m: m.text == "⚙️ Sozlamalar" and faqat_ega(m.from_user.id))
     def h_sozlamalar(msg):
         uid = msg.from_user.id
+        joriy_tz = sozlama_ol("vaqt_zona", "Asia/Tashkent")
+        # Joriy vaqtni ko'rsatish
+        hozir = datetime.now(_tz()).strftime("%H:%M")
+        tz_nomi = joriy_tz
+        for nom, kod in VAQT_ZONALARI:
+            if kod == joriy_tz:
+                tz_nomi = nom
+                break
         matn = ("⚙️ SOZLAMALAR\n" + "━" * 20 + "\n\n"
                 f"🆔 Sizning ID: {uid}\n"
-                f"🕐 Vaqt zonasi: Toshkent (UTC+5)\n\n"
+                f"🕐 Vaqt zonasi: {tz_nomi}\n"
+                f"🕐 Hozirgi vaqt: {hozir}\n\n"
                 "📌 Avtomatik xabarlar:\n"
                 "• 07:00 — Ertalabki reja\n"
                 "• 21:00 — Kun yakuni\n"
                 "• Eslatmalar — belgilangan vaqtda\n"
                 "• Muhim sanalar — oldindan")
-        bot.send_message(msg.chat.id, matn)
+        kb = types.InlineKeyboardMarkup()
+        kb.add(types.InlineKeyboardButton("🌍 Vaqt zonasini o'zgartirish", callback_data="TZ_MENU"))
+        bot.send_message(msg.chat.id, matn, reply_markup=kb)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "TZ_MENU")
+    def cb_tz_menu(call):
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        for nom, kod in VAQT_ZONALARI:
+            kb.add(types.InlineKeyboardButton(nom, callback_data=f"TZSET_{kod}"))
+        bot.send_message(call.message.chat.id, "🌍 Vaqt zonasini tanlang:", reply_markup=kb)
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("TZSET_"))
+    def cb_tzset(call):
+        kod = call.data.replace("TZSET_", "")
+        sozlama_saqla("vaqt_zona", kod)
+        nom = kod
+        for n, k in VAQT_ZONALARI:
+            if k == kod:
+                nom = n
+                break
+        hozir = datetime.now(_tz()).strftime("%H:%M")
+        bot.edit_message_text(
+            f"✅ Vaqt zonasi o'zgartirildi!\n\n{nom}\n🕐 Hozirgi vaqt: {hozir}",
+            call.message.chat.id, call.message.message_id)
+        bot.answer_callback_query(call.id, "Saqlandi!")
 
     # ============ MATN HANDLER (step machine) ============
     @bot.message_handler(func=lambda m: True, content_types=["text"])
