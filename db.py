@@ -2,7 +2,19 @@ import sqlite3
 import os
 from datetime import datetime, timedelta
 import pytz
-from config import TZ, BOSHLANGICH_YONALISHLAR
+from config import STANDART_TZ, BOSHLANGICH_YONALISHLAR
+
+def _tz():
+    """Joriy vaqt zonasi (DB dan)"""
+    try:
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        r = conn.execute("SELECT qiymat FROM sozlama WHERE kalit='vaqt_zona'").fetchone()
+        conn.close()
+        nom = r["qiymat"] if r else STANDART_TZ
+        return pytz.timezone(nom)
+    except:
+        return pytz.timezone(STANDART_TZ)
 
 DB_PATH = os.environ.get("DB_PATH", "/data/hayot.db")
 
@@ -14,11 +26,11 @@ def get_db():
 
 
 def bugun_str():
-    return datetime.now(TZ).strftime("%d.%m.%Y")
+    return datetime.now(_tz()).strftime("%d.%m.%Y")
 
 
 def hozir_str():
-    return datetime.now(TZ).strftime("%d.%m.%Y %H:%M")
+    return datetime.now(_tz()).strftime("%d.%m.%Y %H:%M")
 
 
 def init_db():
@@ -312,7 +324,7 @@ def yaqin_sanalar(kun=7):
     conn = get_db()
     sanalar = conn.execute("SELECT * FROM muhim_sanalar").fetchall()
     conn.close()
-    bugun = datetime.now(TZ).date()
+    bugun = datetime.now(_tz()).date()
     natija = []
     for s in sanalar:
         try:
