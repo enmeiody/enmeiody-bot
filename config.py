@@ -4,13 +4,40 @@ import pytz
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-# Vaqt zonasi - Uzbekiston (UTC+5)
-TZ = pytz.timezone("Asia/Tashkent")
-
 # Egasi (faqat siz) - Telegram ID
 EGA_ID = int(os.environ.get("EGA_ID", "0"))
 
-# Boshlang'ich yo'nalishlar (keyin qo'shish/o'chirish mumkin)
+# Standart vaqt zonasi (sozlamalardan o'zgartirish mumkin)
+STANDART_TZ = "Asia/Tashkent"
+
+# Mavjud vaqt zonalari (tugma uchun)
+VAQT_ZONALARI = [
+    ("🇺🇿 Toshkent", "Asia/Tashkent"),
+    ("🇨🇳 Xitoy (Pekin)", "Asia/Shanghai"),
+    ("🇷🇺 Moskva", "Europe/Moscow"),
+    ("🇹🇷 Istanbul", "Europe/Istanbul"),
+    ("🇦🇪 Dubay", "Asia/Dubai"),
+    ("🇰🇿 Olmaota", "Asia/Almaty"),
+    ("🇰🇷 Seul", "Asia/Seoul"),
+    ("🇬🇧 London", "Europe/London"),
+    ("🇺🇸 Nyu-York", "America/New_York"),
+]
+
+
+def get_tz():
+    """Joriy vaqt zonasini DB dan o'qiydi, bo'lmasa standart"""
+    try:
+        from db import sozlama_ol
+        nom = sozlama_ol("vaqt_zona", STANDART_TZ)
+        return pytz.timezone(nom)
+    except:
+        return pytz.timezone(STANDART_TZ)
+
+
+# Eski kod mosligi uchun (dinamik chaqiriladi)
+TZ = pytz.timezone(STANDART_TZ)
+
+# Boshlang'ich yo'nalishlar
 BOSHLANGICH_YONALISHLAR = [
     ("Umumiy", "🌐", "Sen umumiy hayot yordamchisisan. Kunlik rejalar, sog'liq, shaxsiy rivojlanish va boshqa narsalarda yordam berasan. Samimiy va qisqa gapirasan."),
     ("SMM", "🎬", "Sen SMM mutaxassisi yordamchisisan. Kontent rejalar, post g'oyalari, trend tahlili, auditoriya o'sishi haqida professional maslahat berasan."),
