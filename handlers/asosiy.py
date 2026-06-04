@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import pytz
 from telebot import types
 from config import EGA_ID, USTUVORLIK, USTUVORLIK_NOMI, BUDJET_TUR, VAQT_ZONALARI
-from db import (_tz, sozlama_ol, sozlama_saqla, get_yonalishlar, get_yonalish, yonalish_qosh, yonalish_ochir,
+from db import (_tz, sozlama_ol, sozlama_saqla, profil_qosh, profil_ol, profil_ochir, profil_matn, get_yonalishlar, get_yonalish, yonalish_qosh, yonalish_ochir,
                 vazifa_qosh, vazifalar_royxat, vazifa_bajar, vazifa_ochir, bugungi_vazifalar,
                 eslatma_qosh, eslatmalar_royxat, eslatma_ochir,
                 budjet_qosh, budjet_xulosa, budjet_royxat,
@@ -462,6 +462,61 @@ def register(bot):
         bot.edit_message_text("🗑 Yo'nalish o'chirildi", call.message.chat.id, call.message.message_id)
         bot.answer_callback_query(call.id)
 
+    # ============ MEN HAQIMDA (AI xotirasi) ============
+    @bot.message_handler(func=lambda m: m.text == "👤 Men haqimda" and faqat_ega(m.from_user.id))
+    def h_men_haqimda(msg):
+        royxat = profil_ol(None)
+        matn = "👤 MEN HAQIMDA\n" + "━" * 20 + "\n\n"
+        matn += "AI shu ma'lumotlarni doim biladi:\n\n"
+        if royxat:
+            for p in royxat:
+                if p["yonalish_id"]:
+                    y = get_yonalish(p["yonalish_id"])
+                    teg = f"{y['emoji']}" if y else ""
+                else:
+                    teg = "🌐"
+                matn += f"{teg} {p['matn']}\n"
+        else:
+            matn += "Hali ma'lumot yo'q.\n\nMisol: 'Mening ismim Ali', 'Veganman', 'Har kuni 6:00 da turaman'"
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        kb.add(types.InlineKeyboardButton("➕ Ma'lumot qo'shish", callback_data="PROF_QOSH"))
+        if royxat:
+            kb.add(types.InlineKeyboardButton("🗑 O'chirish", callback_data="PROF_OCHIR_MENU"))
+        bot.send_message(msg.chat.id, matn, reply_markup=kb)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "PROF_QOSH")
+    def cb_prof_qosh(call):
+        kb = yonalishlar_kb("PROFYON_", [("🌐 Umumiy (hamma joyda)", "PROFYON_0")])
+        bot.send_message(call.message.chat.id,
+            "Bu ma'lumot qaysi yo'nalishga tegishli?\n(Umumiy = AI har doim biladi)",
+            reply_markup=kb)
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("PROFYON_"))
+    def cb_profyon(call):
+        uid = call.from_user.id
+        yid = int(call.data.replace("PROFYON_", ""))
+        astate[uid] = {"step": "profil_qosh", "yid": yid if yid else None}
+        bot.send_message(call.message.chat.id,
+            "✏️ Ma'lumotni yozing:\n(masalan: Mening ismim Ali, 3 ta farzandim bor)")
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data == "PROF_OCHIR_MENU")
+    def cb_prof_ochir_menu(call):
+        royxat = profil_ol(None)
+        kb = types.InlineKeyboardMarkup(row_width=1)
+        for p in royxat:
+            kb.add(types.InlineKeyboardButton(f"🗑 {p['matn'][:35]}", callback_data=f"PROFOCH_{p['id']}"))
+        bot.send_message(call.message.chat.id, "Qaysi ma'lumotni o'chirish?", reply_markup=kb)
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data.startswith("PROFOCH_"))
+    def cb_profoch(call):
+        pid = int(call.data.replace("PROFOCH_", ""))
+        profil_ochir(pid)
+        bot.edit_message_text("🗑 O'chirildi", call.message.chat.id, call.message.message_id)
+        bot.answer_callback_query(call.id)
+
     # ============ SOZLAMALAR ============
     @bot.message_handler(func=lambda m: m.text == "⚙️ Sozlamalar" and faqat_ega(m.from_user.id))
     def h_sozlamalar(msg):
@@ -522,7 +577,8 @@ def register(bot):
 
         # Bosh menyu tugmalari - skip
         menyu_btnlar = ["📋 Bugungi reja", "✅ Vazifalar", "⏰ Eslatmalar", "💰 Budjet",
-                        "🎂 Muhim sanalar", "🧠 AI suhbat", "📂 Yo'nalishlar", "⚙️ Sozlamalar"]
+                        "🎂 Muhim sanalar", "🧠 AI suhbat", "👤 Men haqimda",
+                        "📂 Yo'nalishlar", "⚙️ Sozlamalar"]
         if text in menyu_btnlar:
             return
 
@@ -624,13 +680,25 @@ def register(bot):
                 reply_markup=bosh_menyu())
             return
 
+        # ----- MEN HAQIMDA (profil qo'shish) -----
+        if step == "profil_qosh":
+            yid = st.get("yid")
+            profil_qosh(text, yid)
+            astate.pop(uid, None)
+            joy = "umumiy" if not yid else get_yonalish(yid)["nomi"]
+            bot.send_message(msg.chat.id,
+                f"✅ Eslab qoldim! ({joy})\n\nEndi AI bu ma'lumotni doim biladi.",
+                reply_markup=bosh_menyu())
+            return
+
         # ----- AI SUHBAT -----
         if step == "ai_suhbat":
             yid = st["yid"]
             y = get_yonalish(yid)
             bot.send_chat_action(msg.chat.id, "typing")
             tarix = ai_tarix_ol(yid, 10)
-            javob = ai_javob(y["ai_shaxsiyat"], text, tarix)
+            profil = profil_matn(yid)
+            javob = ai_javob(y["ai_shaxsiyat"], text, tarix, profil)
             ai_tarix_qosh(yid, "user", text)
             ai_tarix_qosh(yid, "assistant", javob)
             bot.send_message(msg.chat.id, javob)
@@ -644,7 +712,8 @@ def register(bot):
                 y = get_yonalish(yid)
                 bot.send_chat_action(msg.chat.id, "typing")
                 tarix = ai_tarix_ol(yid, 6)
-                javob = ai_javob(y["ai_shaxsiyat"], text, tarix)
+                profil = profil_matn(yid)
+                javob = ai_javob(y["ai_shaxsiyat"], text, tarix, profil)
                 ai_tarix_qosh(yid, "user", text)
                 ai_tarix_qosh(yid, "assistant", javob)
                 bot.send_message(msg.chat.id, javob)
