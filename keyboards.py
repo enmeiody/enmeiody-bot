@@ -8,7 +8,8 @@ def bosh_menyu():
     kb.add("📋 Bugungi reja", "✅ Vazifalar")
     kb.add("⏰ Eslatmalar", "💰 Budjet")
     kb.add("🎂 Muhim sanalar", "🧠 AI suhbat")
-    kb.add("📂 Yo'nalishlar", "⚙️ Sozlamalar")
+    kb.add("👤 Men haqimda", "📂 Yo'nalishlar")
+    kb.add("⚙️ Sozlamalar")
     return kb
 
 
